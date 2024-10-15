@@ -2,7 +2,6 @@ package kvsrv
 
 import (
 	"labrpc"
-	"slices"
 	"time"
 )
 import "crypto/rand"
@@ -11,10 +10,8 @@ import "math/big"
 var clientCount uint = 0
 
 type Clerk struct {
-	server     *labrpc.ClientEnd
-	id         uint
-	sequence   uint
-	incomplete []uint
+	server *labrpc.ClientEnd
+	id     uint
 	// You will have to modify this struct.
 }
 
@@ -25,18 +22,6 @@ func nRand() int64 {
 	return x
 }
 
-func (ck *Clerk) firstIncomplete() uint {
-	return slices.Min(ck.incomplete)
-}
-
-func (ck *Clerk) markSequenceComplete() {
-	for i, other := range ck.incomplete {
-		if other == ck.sequence {
-			ck.incomplete = append(ck.incomplete[:i], ck.incomplete[i+1:]...)
-		}
-	}
-}
-
 var time0 = time.Now()
 
 func MakeClerk(server *labrpc.ClientEnd) *Clerk {
@@ -44,8 +29,6 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 	ck.server = server
 	clientCount++
 	ck.id = clientCount
-	ck.incomplete = make([]uint, 0)
-	ck.sequence = 1
 	// You'll have to add code here.
 	return ck
 }
@@ -84,32 +67,13 @@ func (ck *Clerk) Get(key string) string {
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	timestamp := int64(time.Since(time0))
-	args := PutAppendArgs{}
-	if op == "Append" {
-		ck.incomplete = append(ck.incomplete, ck.sequence)
-		args = PutAppendArgs{
-			key, value,
-			ck.id, ck.sequence,
-			timestamp, ck.firstIncomplete(),
-		}
-		DPrintf("-> FI: %v, %v\n", ck.firstIncomplete(), ck.sequence)
-	} else {
-		// we don't check these for put because we don't care about duplicates
-		args = PutAppendArgs{
-			key, value,
-			0, 0,
-			timestamp, 0,
-		}
+	args := PutAppendArgs{
+		key, value, ck.id, timestamp,
 	}
 	reply := PutAppendReply{}
 	for {
 		ok := ck.server.Call("KVServer."+op, &args, &reply)
 		if ok {
-			if op == "Append" {
-				ck.markSequenceComplete()
-				ck.sequence++
-				DPrintf("%v+%v", ck.sequence)
-			}
 			return reply.Value
 		}
 	}

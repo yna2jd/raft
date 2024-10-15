@@ -1,12 +1,12 @@
 package kvsrv
 
 import (
-	"models"
-	"porcupine"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"models"
+	"porcupine"
 	"runtime"
 	//"runtime/debug"
 	"strconv"
@@ -296,6 +296,9 @@ func GenericTest(t *testing.T, nclients int, unreliable bool, randomkeys bool) {
 	}
 
 	res, info := porcupine.CheckOperationsVerbose(models.KvModel, opLog.Read(), linearizabilityCheckTimeout)
+	//
+	cfg.kvserver.PrintServer()
+	//
 	if res == porcupine.Illegal {
 		file, err := ioutil.TempFile("", "*.html")
 		if err != nil {

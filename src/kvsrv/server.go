@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 const Debug = true
+
+const TIMEOUT = 300
 
 func DPrintf(format string, a ...interface{}) {
 	if Debug {
@@ -31,19 +34,15 @@ type Operation struct {
 
 func (o *Operation) String() string {
 	castStruct := o.args
-	str := []string{"Get", "Put", "Append"}[o.cmd] + ": "
+	str := []string{"G", "P", "A"}[o.cmd] + ": "
 	if o.cmd == GET {
 		getStruct := castStruct.(*GetArgs)
 		str += fmt.Sprintf("[k: %v, id: %v, ts: %v]", getStruct.Key, getStruct.Id, getStruct.Timestamp)
-	} else if o.cmd == PUT {
-		putStruct := castStruct.(*PutAppendArgs)
-		str += fmt.Sprintf("[k: %v, v: %v, ts: %v]", putStruct.Key, putStruct.Value, putStruct.Timestamp)
 	} else {
 		appendStruct := castStruct.(*PutAppendArgs)
 		str += fmt.Sprintf(
-			"[k: %v, v: %v, i: %v, s: %v, ts: %v, fi: %v]",
-			appendStruct.Key, appendStruct.Value, appendStruct.Id,
-			appendStruct.Sequence, appendStruct.Timestamp, appendStruct.Incomplete,
+			"[k: %v, v: %v, i: %v, ts: %v]",
+			appendStruct.Key, appendStruct.Value, appendStruct.Id, appendStruct.Timestamp,
 		)
 	}
 	return str
@@ -67,7 +66,7 @@ func (e *Event) String() string {
 	if e.Type == COMMIT {
 		eventType = "Commit"
 	}
-	return fmt.Sprintf("[%v, %v, %v]\n", eventType, e.Time, e.Data.String())
+	return fmt.Sprintf("[%v, %v]\n", eventType, e.Data.String())
 }
 
 func String(events []Event) string {
@@ -79,44 +78,39 @@ func String(events []Event) string {
 }
 
 type KVServer struct {
-	mutexData sync.Mutex
-	data      map[string]string
-	mutexSeen sync.Mutex
-	seen      map[uint]map[uint]string
-	pending   map[string]struct{} // in-progress xids and their args
-	// Your definitions here.
-	mutexEvents sync.Mutex
-	events      []Event
+	mu      sync.Mutex
+	data    map[string]string
+	seen    map[uint]map[int64]string
+	pending map[string]struct{} // in-progress xids and their args
+
+	//time.After(100 * time.Millisecond)
 }
 
-func PrintServer(kv *KVServer) {
-	if false {
-		kv.mutexEvents.Lock()
-		DPrintf("KVServer events: %v", String(kv.events))
-		kv.mutexEvents.Unlock()
-	}
+func (kv *KVServer) PrintServer() {
+	//if true {
+	//	fmt.Printf("KVServer events:\n%v", String(kv.events))
+	//}
 }
 
 // Get (key) fetches the current value for the key.
 // A Get for a non-existent key should return an empty string.
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	event := Event{
-		PREPARE,
-		args.Timestamp,
-		Operation{GET, args, reply},
-	}
-	kv.mutexEvents.Lock()
-	kv.events = append(kv.events, event)
-	kv.mutexEvents.Unlock()
-	PrintServer(kv)
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	//event := Event{
+	//	PREPARE,
+	//	args.Timestamp,
+	//	Operation{GET, args, reply},
+	//}
+	//kv.mutexEvents.Lock()
+	//kv.events = append(kv.events, event)
+	//kv.mutexEvents.Unlock()
 	kv.GetCommit(args, reply)
 	return
 }
 
 func (kv *KVServer) GetCommit(args *GetArgs, reply *GetReply) {
-	kv.mutexData.TryLock()
 	value, ok := kv.data[args.Key]
-	kv.mutexData.Unlock()
 	if ok {
 		reply.Value = value
 	} else {
@@ -129,104 +123,74 @@ func (kv *KVServer) GetCommit(args *GetArgs, reply *GetReply) {
 // Duplicate puts have no effect
 
 func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
-	event := Event{
-		PREPARE,
-		args.Timestamp,
-		Operation{PUT, args, reply},
-	}
-	kv.mutexEvents.Lock()
-	kv.events = append(kv.events, event)
-	kv.mutexEvents.Unlock()
-	kv.mutexData.Lock()
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	//event := Event{
+	//	PREPARE,
+	//	args.Timestamp,
+	//	Operation{PUT, args, reply},
+	//}
+	//kv.mutexEvents.Lock()
+	//kv.events = append(kv.events, event)
+	//kv.mutexEvents.Unlock()
 	kv.data[args.Key] = args.Value
 	reply.Value = kv.data[args.Key]
-	kv.mutexData.Unlock()
-	PrintServer(kv)
-}
 
-// returns a true if the value has already been calculated
-func isXidSeen(kv *KVServer, id uint, sequence uint, replyValue *string) bool {
-	//_, isPending := kv.data[xid]
-	//if isPending {
-	//	for {
-	//		time.Sleep(2 * time.Second)
-	//		_, ok := kv.seen[xid]
-	//		if ok{
-	//			break
-	//		}
-	//	}
-	//	return true
-	//}
-	kv.mutexSeen.Lock()
-	value, beenSeen := kv.seen[id][sequence]
-	kv.mutexSeen.Unlock()
-	if beenSeen {
-		*replyValue = value
-		return true
-	}
-	return false
-}
-
-func markXidSeen(kv *KVServer, id uint, sequence uint, replyValue string) {
-	kv.mutexSeen.Lock()
-	if kv.seen[id] == nil {
-		kv.seen[id] = make(map[uint]string)
-	}
-	kv.seen[id][sequence] = replyValue
-	kv.mutexSeen.Unlock()
 }
 
 // Append (key, arg) appends arg to key’s value and returns the old value.
 // An Append to a non-existent key should act as if the existing value were a zero-length string.
 func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
-	replyString := ""
-	seen := isXidSeen(kv, args.Id, args.Sequence, &replyString)
-	if seen {
-		reply.Value = replyString
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	value, wasSeen := kv.seen[args.Id][args.Timestamp]
+	if wasSeen {
+		reply.Value = value
 		return
 	}
-
-	kv.mutexSeen.Lock()
-	oldSeen := kv.seen[args.Id]
-	newSeen := make(map[uint]string)
-	kv.mutexSeen.Unlock()
-	for seq := range oldSeen {
-		if seq >= args.Incomplete {
-			newSeen[seq] = oldSeen[seq]
+	newSeen := make(map[uint]map[int64]string)
+	for id, list := range kv.seen {
+		var ts int64
+		for ts = range list {
+			newSeen[id] = make(map[int64]string)
+			if ts <= int64(TIMEOUT*time.Millisecond) { //change to clerk id
+				newSeen[id][ts] = kv.seen[id][ts]
+			}
+			if len(newSeen[id]) == 0 {
+				delete(newSeen, id)
+			}
 		}
 	}
-	kv.mutexSeen.Lock()
-	kv.seen[args.Id] = newSeen
-	kv.mutexSeen.Unlock()
+	kv.seen = newSeen
 
-	event := Event{
-		PREPARE,
-		args.Timestamp,
-		Operation{APPEND, args, reply},
-	}
-	kv.mutexEvents.Lock()
-	kv.events = append(kv.events, event)
-	kv.mutexEvents.Unlock()
+	//event := Event{
+	//	PREPARE,
+	//	args.Timestamp,
+	//	Operation{APPEND, args, reply},
+	//}
+	//kv.mutexEvents.Lock()
+	//kv.events = append(kv.events, event)
+	//kv.mutexEvents.Unlock()
 
-	kv.mutexData.Lock()
 	value, ok := kv.data[args.Key]
 	if !ok {
 		value = ""
 	}
 	kv.data[args.Key] = value + args.Value
-	reply.Value = kv.data[args.Key]
-	kv.mutexData.Unlock()
-	markXidSeen(kv, args.Id, args.Sequence, reply.Value)
-	PrintServer(kv)
+	reply.Value = value
+	if kv.seen[args.Id] == nil {
+		kv.seen[args.Id] = make(map[int64]string)
+	}
+	kv.seen[args.Id][args.Timestamp] = reply.Value
+
 	return
 }
 
 func StartKVServer() *KVServer {
 	kv := new(KVServer)
 	kv.data = make(map[string]string)
-	kv.seen = make(map[uint]map[uint]string)
-	kv.pending = make(map[string]struct{})
-	kv.events = make([]Event, 0)
+	kv.seen = make(map[uint]map[int64]string)
+	//kv.events = make([]Event, 0)
 	DPrintf("Created server.")
 	return kv
 }
