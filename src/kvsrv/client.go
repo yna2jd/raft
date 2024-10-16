@@ -12,6 +12,7 @@ var clientCount uint = 0
 type Clerk struct {
 	server *labrpc.ClientEnd
 	id     uint
+	seq    uint
 	// You will have to modify this struct.
 }
 
@@ -45,11 +46,12 @@ func MakeClerk(server *labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
 	timestamp := int64(time.Since(time0))
-	args := GetArgs{key, ck.id, timestamp}
+	args := GetArgs{key, ck.id, ck.seq, timestamp}
 	reply := GetReply{}
 	for {
 		ok := ck.server.Call("KVServer.Get", &args, &reply)
 		if ok {
+			ck.seq++
 			return reply.Value
 		}
 
@@ -68,12 +70,13 @@ func (ck *Clerk) Get(key string) string {
 func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	timestamp := int64(time.Since(time0))
 	args := PutAppendArgs{
-		key, value, ck.id, timestamp,
+		key, value, ck.id, ck.seq, timestamp,
 	}
 	reply := PutAppendReply{}
 	for {
 		ok := ck.server.Call("KVServer."+op, &args, &reply)
 		if ok {
+			ck.seq++
 			return reply.Value
 		}
 	}
