@@ -9,8 +9,6 @@ import (
 const Debug = true
 const DebugEvents = false
 
-const TIMEOUT = 200
-
 func DPrintf(format string, a ...interface{}) {
 	if Debug {
 		log.Printf(format, a...)
@@ -37,11 +35,11 @@ func (o *Operation) String() string {
 	str := []string{"G", "P", "A"}[o.cmd] + ": "
 	if o.cmd == GET {
 		getStruct := castStruct.(*GetArgs)
-		str += fmt.Sprintf("[id: %v, k: %v,  ts: %v]", getStruct.Id, getStruct.Key, getStruct.Timestamp)
+		str += fmt.Sprintf("[xid: %v, k: %v,  ts: %v]", getStruct.Id, getStruct.Key, getStruct.Timestamp)
 	} else {
 		appendStruct := castStruct.(*PutAppendArgs)
 		str += fmt.Sprintf(
-			"[id: %v, k: %v, v: %v, ts: %v]",
+			"[xid: %v, k: %v, v: %v, ts: %v]",
 			appendStruct.Id, appendStruct.Key, appendStruct.Value, appendStruct.Timestamp,
 		)
 	}
@@ -77,21 +75,19 @@ func String(events []Event) string {
 	return str
 }
 
-type SeenVal struct {
-	ts   int64
-	data string
+type SeenData struct {
+	seq   uint
+	value string
 }
 
 type KVServer struct {
-	mu        sync.Mutex
-	data      map[string]string
-	seenIndex int
-	//seen        map[uint]map[uint]SeenVal
-	seen        map[uint]map[uint]string
-	pending     map[string]struct{} // in-progress xids and their args
+	mu   sync.Mutex
+	data map[string]string
+	seen map[uint]SeenData
+
+	//for debugging
 	mutexEvents sync.Mutex
 	events      []Event
-	//time.After(100 * time.Millisecond)
 }
 
 func (kv *KVServer) PrintServer() {
@@ -121,12 +117,10 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	} else {
 		reply.Value = ""
 	}
-	return
 }
 
 // Put (key, value) installs or replaces the value for a particular key in the map
 // Duplicate puts have no effect
-
 func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
@@ -142,7 +136,6 @@ func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
 	}
 	kv.data[args.Key] = args.Value
 	reply.Value = kv.data[args.Key]
-
 }
 
 // Append (key, arg) appends arg to key’s value and returns the old value.
@@ -150,12 +143,12 @@ func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
 func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
-	value, wasSeen := kv.seen[args.Id][args.Sequence]
-	if wasSeen {
-		reply.Value = value
+	// As each clerk only sends one value at a time, we can use this system
+	cachedValue, wasSeen := kv.seen[args.Id]
+	if wasSeen && cachedValue.seq == args.Sequence {
+		reply.Value = cachedValue.value
 		return
 	}
-
 	if DebugEvents {
 		event := Event{
 			PREPARE,
@@ -170,30 +163,16 @@ func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
 	if !ok {
 		value = ""
 	}
-	kv.data[args.Key] = value + args.Value
 	reply.Value = value
-
-	if kv.seen[args.Id] == nil {
-		kv.seen[args.Id] = make(map[uint]string)
-	}
-	kv.seen[args.Id][args.Sequence] = reply.Value
-
-	// Cleans up old seen values based on SeqLenience const
-	// Higher value is needed based on unreliability
-	if int(args.Sequence)-SeqLenience > 0 {
-		_, exists := kv.seen[args.Id][args.Sequence-SeqLenience]
-		if exists {
-			delete(kv.seen[args.Id], args.Sequence-SeqLenience)
-		}
-	}
-
+	kv.seen[args.Id] = SeenData{args.Sequence, value} // last append
+	kv.data[args.Key] = value + args.Value
 	return
 }
 
 func StartKVServer() *KVServer {
 	kv := new(KVServer)
 	kv.data = make(map[string]string)
-	kv.seen = make(map[uint]map[uint]string)
+	kv.seen = make(map[uint]SeenData)
 	kv.events = make([]Event, 0)
 	return kv
 }
