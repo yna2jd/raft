@@ -4,7 +4,26 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="738a119b-ad04-41d2-8ad7-bfb106bcdb6d" name="Changes" comment="" />
+    <list default="true" id="738a119b-ad04-41d2-8ad7-bfb106bcdb6d" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../.idea/.gitignoreZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/cs4740-fall24-labs.imlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/modules.xmlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/vcs.xmlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/workspace.xmlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xmlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/src.imlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xmlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xmlZone.Identifier" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/kvsrv/client.go" beforeDir="false" afterPath="$PROJECT_DIR$/kvsrv/client.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kvsrv/common.go" beforeDir="false" afterPath="$PROJECT_DIR$/kvsrv/common.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kvsrv/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/kvsrv/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kvsrv/test_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/kvsrv/test_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main/test-ii.sh" beforeDir="false" afterPath="$PROJECT_DIR$/main/test-ii.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main/test-mr.sh" beforeDir="false" afterPath="$PROJECT_DIR$/main/test-mr.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main/test-wc.sh" beforeDir="false" afterPath="$PROJECT_DIR$/main/test-wc.sh" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -12,7 +31,7 @@
   </component>
   <component name="GOROOT" url="file://$PROJECT_DIR$/../../../../../../usr/local/go" />
   <component name="Git.Settings">
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../../.." />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
   <component name="GoLibraries">
     <option name="urls">
@@ -39,7 +58,7 @@
     "git-widget-placeholder": "main",
     "go.import.settings.migrated": "true",
     "go.sdk.automatically.set": "true",
-    "last_opened_file_path": "//wsl.localhost/Ubuntu-22.04/home/sebastian-f/go/lab1/cs4740-fall24-labs/src",
+    "last_opened_file_path": "//wsl.localhost/Ubuntu-22.04/home/sebastian-f/cs4740-fall24-labs",
     "node.js.detected.package.eslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
