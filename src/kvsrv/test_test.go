@@ -371,6 +371,67 @@ func TestUnreliableOneKey2(t *testing.T) {
 	cfg.end()
 }
 
+var time1 = time.Now()
+
+func Timestamp() int64 {
+	return time.Since(time1).Milliseconds()
+}
+
+// Test: unreliable net, many clients, one key
+func TestUnreliableOneKeyPut(t *testing.T) {
+	cfg := make_config(t, true)
+	defer cfg.cleanup()
+
+	ck := cfg.makeClient()
+
+	cfg.begin("Test: concurrent put to same key, unreliable")
+
+	Put(cfg, ck, "k", "", nil, -1)
+
+	const nClients = 3
+	const upto = 20
+	const ErrorKey = "blank"
+	key := "k"
+	atom := sync.Mutex{}
+	spawn_clients_and_wait(t, cfg, nClients, func(me int, myck *Clerk, t *testing.T) {
+		if me == 0 {
+			for n := 0; n < upto; n++ {
+				nv1 := "x " + strconv.Itoa(me) + " " + strconv.Itoa(n) + " y" + "1"
+				time.Sleep(100 * time.Millisecond)
+				atom.Lock()
+				tnow := Timestamp()
+				fmt.Printf("Put correct >, %v\n", tnow)
+				Put(cfg, myck, key, nv1, nil, -1)
+				tnow = Timestamp()
+				fmt.Printf("Put correct <, %v\n", tnow)
+				atom.Unlock()
+			}
+		} else {
+			for n := 0; n < upto; n++ {
+				atom.Lock()
+				tNow := Timestamp()
+				fmt.Printf("Overwrote >, %v\n", tNow)
+				Put(cfg, myck, key, ErrorKey, nil, -1)
+				tNow = Timestamp()
+				fmt.Printf("Overwrote <, %v\n", tNow)
+				tNow = Timestamp()
+				fmt.Printf("Checked duplicate >, %v \n", tNow)
+				v := Get(cfg, ck, key, nil, -1)
+				if v != ErrorKey {
+					tNow = Timestamp()
+					fmt.Printf("-> Detected dup?, %v\n", tNow)
+				}
+				tNow = Timestamp()
+				fmt.Printf("Checked duplicate <, %v\n", tNow)
+				atom.Unlock()
+
+			}
+
+		}
+	})
+	cfg.end()
+}
+
 const (
 	MiB = 1 << 20
 )

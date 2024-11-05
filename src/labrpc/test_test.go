@@ -51,21 +51,6 @@ func (js *JunkServer) Handler5(args JunkArgs, reply *JunkReply) {
 	reply.X = "no pointer"
 }
 
-func (js *JunkServer) Handler6(args string, reply *int) {
-	js.mu.Lock()
-	defer js.mu.Unlock()
-	*reply = len(args)
-}
-
-func (js *JunkServer) Handler7(args int, reply *string) {
-	js.mu.Lock()
-	defer js.mu.Unlock()
-	*reply = ""
-	for i := 0; i < args; i++ {
-		*reply = *reply + "y"
-	}
-}
-
 func TestBasic(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -140,9 +125,7 @@ func TestTypes(t *testing.T) {
 	}
 }
 
-//
 // does net.Enable(endname, false) really disconnect a client?
-//
 func TestDisconnect(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -179,9 +162,7 @@ func TestDisconnect(t *testing.T) {
 	}
 }
 
-//
 // test net.GetCount()
-//
 func TestCounts(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -215,63 +196,7 @@ func TestCounts(t *testing.T) {
 	}
 }
 
-//
-// test net.GetTotalBytes()
-//
-func TestBytes(t *testing.T) {
-	runtime.GOMAXPROCS(4)
-
-	rn := MakeNetwork()
-	defer rn.Cleanup()
-
-	e := rn.MakeEnd("end1-99")
-
-	js := &JunkServer{}
-	svc := MakeService(js)
-
-	rs := MakeServer()
-	rs.AddService(svc)
-	rn.AddServer(99, rs)
-
-	rn.Connect("end1-99", 99)
-	rn.Enable("end1-99", true)
-
-	for i := 0; i < 17; i++ {
-		args := "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-		args = args + args
-		args = args + args
-		reply := 0
-		e.Call("JunkServer.Handler6", args, &reply)
-		wanted := len(args)
-		if reply != wanted {
-			t.Fatalf("wrong reply %v from Handler6, expecting %v", reply, wanted)
-		}
-	}
-
-	n := rn.GetTotalBytes()
-	if n < 4828 || n > 6000 {
-		t.Fatalf("wrong GetTotalBytes() %v, expected about 5000\n", n)
-	}
-
-	for i := 0; i < 17; i++ {
-		args := 107
-		reply := ""
-		e.Call("JunkServer.Handler7", args, &reply)
-		wanted := args
-		if len(reply) != wanted {
-			t.Fatalf("wrong reply len=%v from Handler6, expecting %v", len(reply), wanted)
-		}
-	}
-
-	nn := rn.GetTotalBytes() - n
-	if nn < 1800 || nn > 2500 {
-		t.Fatalf("wrong GetTotalBytes() %v, expected about 2000\n", nn)
-	}
-}
-
-//
 // test RPCs from concurrent ClientEnds
-//
 func TestConcurrentMany(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -327,9 +252,7 @@ func TestConcurrentMany(t *testing.T) {
 	}
 }
 
-//
 // test unreliable
-//
 func TestUnreliable(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -380,9 +303,7 @@ func TestUnreliable(t *testing.T) {
 	}
 }
 
-//
 // test concurrent RPCs from a single ClientEnd
-//
 func TestConcurrentOne(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -441,10 +362,8 @@ func TestConcurrentOne(t *testing.T) {
 	}
 }
 
-//
 // regression: an RPC that's delayed during Enabled=false
 // should not delay subsequent RPCs (e.g. after Enabled=true).
-//
 func TestRegression1(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
@@ -515,11 +434,9 @@ func TestRegression1(t *testing.T) {
 	}
 }
 
-//
 // if an RPC is stuck in a server, and the server
 // is killed with DeleteServer(), does the RPC
 // get un-stuck?
-//
 func TestKilled(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 

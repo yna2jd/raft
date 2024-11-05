@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 const Debug = true
@@ -75,7 +76,7 @@ func String(events []Event) string {
 	return str
 }
 
-type SeenData struct {
+type SeenEntry struct {
 	seq   uint
 	value string
 }
@@ -83,7 +84,7 @@ type SeenData struct {
 type KVServer struct {
 	mu   sync.Mutex
 	data map[string]string
-	seen map[uint]SeenData
+	seen map[uint]SeenEntry
 
 	//for debugging
 	mutexEvents sync.Mutex
@@ -124,6 +125,16 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
+	cachedValue, wasSeen := kv.seen[args.Id]
+	const UsePutSeen = false
+	if wasSeen && cachedValue.seq == args.Sequence {
+		if UsePutSeen {
+			reply.Value = args.Value
+			return
+		}
+		tnow := time.Since(time0).Milliseconds()
+		fmt.Printf(". Duplicate put, %v\n", tnow)
+	}
 	if DebugEvents {
 		event := Event{
 			PREPARE,
@@ -135,6 +146,7 @@ func (kv *KVServer) Put(args *PutAppendArgs, reply *PutAppendReply) {
 		kv.mutexEvents.Unlock()
 	}
 	kv.data[args.Key] = args.Value
+	kv.seen[args.Id] = SeenEntry{args.Sequence, ""} // we don't store the put value
 	reply.Value = kv.data[args.Key]
 }
 
@@ -164,7 +176,7 @@ func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
 		value = ""
 	}
 	reply.Value = value
-	kv.seen[args.Id] = SeenData{args.Sequence, value} // last append
+	kv.seen[args.Id] = SeenEntry{args.Sequence, value} // last append
 	kv.data[args.Key] = value + args.Value
 	return
 }
@@ -172,7 +184,7 @@ func (kv *KVServer) Append(args *PutAppendArgs, reply *PutAppendReply) {
 func StartKVServer() *KVServer {
 	kv := new(KVServer)
 	kv.data = make(map[string]string)
-	kv.seen = make(map[uint]SeenData)
+	kv.seen = make(map[uint]SeenEntry)
 	kv.events = make([]Event, 0)
 	return kv
 }
