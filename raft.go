@@ -179,19 +179,20 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	out := AppendEntriesReply{rf.currentTerm, 0, false}
-	if args.Term < rf.currentTerm {
+	outdated := args.Term < rf.currentTerm
+	if outdated {
 		*reply = out
 		DPrintf(State, "Term %v: %v recieved outdated append from %v", rf.currentTerm, rf.me, args.Id)
 		return
 	}
-	//if args.Term > rf.currentTerm {
-	//	rf.currentTerm = args.Term
-	//	out.Term = args.Term
-	//	DPrintf(State, "Term %v: %v updated term due to HB", rf.currentTerm, rf.me)
-	//}
-	//if rf.role != Follower {
-	//	rf.stepDown(args.Term, "equal or higher term issue command")
-	//}
+	if args.Term > rf.currentTerm {
+		rf.currentTerm = args.Term
+		out.Term = args.Term
+		DPrintf(State, "Term %v: %v updated term due to HB", rf.currentTerm, rf.me)
+	}
+	if rf.role != Follower {
+		rf.stepDown(args.Term, "equal or higher term issue command")
+	}
 	// election cleanup
 	if rf.votedFor != nil {
 		rf.votedFor = nil
@@ -200,7 +201,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//if index doesn't match, skipped for heartbeat
 	if args.PrevLogIndex < len(rf.log) && //if log long enough to be able to check index
 		rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
-		DPrintf(State, "Term %v: %v has older log than %v: mine: [#%v, t:%v] < args: [#%v, t:%v]", rf.currentTerm, rf.me, args.Id, rf.log[rf.lastApplied].Index, rf.log[rf.lastApplied].Term, args.PrevLogIndex, args.PrevLogTerm)
+		DPrintf(State, "Term %v: %v has older log than %v: mine: [#%v, t:%v] < args: [#%v, t:%v]", rf.currentTerm, rf.me,
+			args.Id, rf.log[rf.lastApplied].Index, rf.log[rf.lastApplied].Term, args.PrevLogIndex, args.PrevLogTerm)
 		*reply = out
 		return
 	}
@@ -227,6 +229,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			rf.log = append(rf.log, entry)
 			rf.lastApplied = logNextIndex
 			out.Success = true
+			//DPrintf(Accept, "Last Applied for %v: %v", rf.me, rf.lastApplied)
 			DPrintf(Accept, "Term %v: %v added entry [#%v, t:%v] to index %v", rf.currentTerm, rf.me, entry.Index, entry.Term, len(rf.log)-1)
 			continue
 		} else
@@ -484,7 +487,8 @@ func (rf *Raft) propagateCommand(peer int, match int, toApply int, commitIndex i
 			rf.mu.Lock()
 			rf.matchIndex[peer] = toApply
 			rf.nextIndex[peer] = toApply + 1
-			DPrintf(Accept, "Term %v: %v's state for %v's indices: match: %v, next: %v", rf.currentTerm, rf.me, peer, rf.matchIndex[peer], rf.nextIndex[peer])
+			DPrintf(Accept, "Term %v: %v's state for %v's indices: match: %v, next: %v",
+				rf.currentTerm, rf.me, peer, rf.matchIndex[peer], rf.nextIndex[peer])
 			entries := ""
 			for i, entry := range args.Entries {
 				entries += strconv.Itoa(entry.Index) + ": " + strconv.Itoa(entry.Term)
@@ -492,7 +496,8 @@ func (rf *Raft) propagateCommand(peer int, match int, toApply int, commitIndex i
 					entries += ", "
 				}
 			}
-			DPrintf(Accept, "Term %v: %v's entries for %v (%v to %v) accepted: [%v]", rf.currentTerm, rf.me, peer, firstNew, toApply, entries)
+			DPrintf(Accept, "Term %v: %v's entries for %v (%v to %v) accepted: [%v]",
+				rf.currentTerm, rf.me, peer, firstNew, toApply, entries)
 			rf.mu.Unlock()
 			rf.updateCommit()
 			return
@@ -503,7 +508,8 @@ func (rf *Raft) propagateCommand(peer int, match int, toApply int, commitIndex i
 				rf.mu.Unlock()
 				return
 			}
-			DPrintf(Accept, "Term %v: %v append for %v rejected [#%v, t%v]", reply.Term, rf.me, peer, firstNew, reply.Term)
+			DPrintf(Accept, "Term %v: %v append for %v rejected [#%v, t%v]",
+				reply.Term, rf.me, peer, firstNew, reply.Term)
 			rf.nextIndex[peer]--
 			rf.mu.Unlock()
 
@@ -588,16 +594,16 @@ func (rf *Raft) BeFollower() {
 	loop := 0
 	for {
 		loop++
-		//DPrintf(StateFine, "Follower loop for %v: %v", rf.me, loop)
+		DPrintf(StateFine, "Follower loop for %v: %v", rf.me, loop)
 		select {
 		case <-rf.heartbeatChan:
 			rf.mu.Lock()
-			//DPrintf(Election, "Term %v: Reset timeout for %v", rf.currentTerm, rf.me)
+			DPrintf(Election, "Term %v: Reset timeout for %v", rf.currentTerm, rf.me)
 			rf.mu.Unlock()
 			continue
 		case <-time.After(random):
 			rf.mu.Lock()
-			//DPrintf(State, "%v became Candidate due to timeout", rf.me)
+			DPrintf(State, "%v became Candidate due to timeout", rf.me)
 			rf.role = Candidate
 			rf.mu.Unlock()
 			return
@@ -647,9 +653,9 @@ func (rf *Raft) BeCandidate() {
 					rf.role = Leader
 					rf.nextIndex = make([]int, len(rf.peers))
 					rf.matchIndex = make([]int, len(rf.peers))
-					next := rf.getLast().Index
+					next := rf.getLast().Index + 1
 					for i := range len(rf.peers) {
-						rf.nextIndex[i] = next + 1
+						rf.nextIndex[i] = next
 						rf.matchIndex[i] = 0
 					}
 					wonElection <- true
@@ -688,7 +694,8 @@ func (rf *Raft) StateTimer() {
 	for {
 		rf.mu.Lock()
 		role := rf.role
-		DPrintf(State, "Term %v: %v has role %v", rf.currentTerm, rf.me, []string{"Follower", "Candidate", "Leader"}[int(role)])
+		roles := [...]string{"Follower", "Candidate", "Leader"}
+		DPrintf(State, "Term %v: %v has role %v", rf.currentTerm, rf.me, roles[int(role)])
 		rf.mu.Unlock()
 		switch role {
 		case Follower:
@@ -702,7 +709,7 @@ func (rf *Raft) StateTimer() {
 }
 
 func (rf *Raft) SendHeartbeat() {
-	//DPrintf(State, "Sending heartbeat")
+	DPrintf(State, "Sending heartbeat")
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
@@ -719,7 +726,7 @@ func (rf *Raft) SendHeartbeat() {
 				CommitIndex:  rf.commitIndex,
 			}
 			reply := AppendEntriesReply{}
-			//DPrintf(StateFine, "Term %v: Leader %v sent HB to %v", rf.currentTerm, rf.me, peer)
+			DPrintf(StateFine, "Term %v: Leader %v sent HB to %v", rf.currentTerm, rf.me, peer)
 			rf.mu.Unlock()
 			ok := rf.sendAppendEntries(peer, &args, &reply)
 			rf.mu.Lock()
