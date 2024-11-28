@@ -223,10 +223,7 @@ func (rf *Raft) propagateFollowers() bool {
 		if peer == rf.me {
 			continue
 		}
-		prev := rf.log[rf.nextIndex[peer]-1] //maybe switch to next - 1?
-		if prev.Index != rf.nextIndex[peer]-1 {
-			DPrintf(Test, "Error: mismatched prev and next: p: %v, n: %v", prev.Index, rf.nextIndex[peer]-1)
-		}
+		prev := rf.log[rf.matchIndex[peer]] //maybe switch to next - 1?
 		args := AppendEntriesArgs{
 			Term:         rf.currentTerm,
 			Id:           rf.me,
@@ -292,7 +289,7 @@ func (rf *Raft) propagateCommand(peer int, args AppendEntriesArgs) {
 		rf.nextIndex[peer] = rf.matchIndex[peer] + 1
 		DPrintf(Accept, "Term %v: %v's state for %v's indices: match: %v, next: %v", rf.currentTerm, rf.me, peer, rf.matchIndex[peer], rf.nextIndex[peer])
 		DPrintf(Accept, "Term %v: %v's entries for %v (%v to %v) accepted", rf.currentTerm, rf.me, peer, args.PrevLogIndex+1, verifiedIndex)
-	} else { //
+	} else {
 		DPrintf(Accept, "Term %v: %v append for %v rejected. match: %v next: %v", reply.Term, rf.me, peer, rf.matchIndex[peer], rf.nextIndex[peer])
 		rf.nextIndex[peer]--
 		if rf.nextIndex[peer] < 0 {
@@ -339,7 +336,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 	prev := rf.getLast()
 	if args.PrevLogIndex > prev.Index {
-		reply.LastIndex = prev.Index + 1
 		DPrintf(State, "Term %v: %v received too large previous value (%v > %v) from %v", rf.currentTerm, rf.me, args.PrevLogIndex, len(rf.log)-1, args.Id)
 		rf.printLog()
 		return
@@ -430,7 +426,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	last := rf.log[rf.lastApplied]
 	if last.Term > args.LastLogTerm || last.Index > args.LastLogIndex { // requester is unqualified
 		DPrintf(Election, "Term %v: %v did not vote for %v, less qualified", rf.currentTerm, rf.me, args.CandidateId)
-
 		return
 	}
 	reply.VoteGranted = true
@@ -654,10 +649,9 @@ func (rf *Raft) BecomeLeader() {
 	rf.role = Leader
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
-	//next := rf.getLast().Index
 	for i := range len(rf.peers) {
 		rf.matchIndex[i] = 0
-		rf.nextIndex[i] = 1
+		rf.nextIndex[i] = 1 //lastApplied?
 	}
 }
 
@@ -685,6 +679,7 @@ func (rf *Raft) StateTimer() {
 				continue // if candidate (due to timeout), restarts election (candidate return)
 			}
 		case Leader:
+			DPrintf(State, "Leader %v tick", rf.me)
 			ok := rf.propagateFollowers()
 			if !ok {
 				continue
@@ -731,7 +726,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.applyChan = applyCh
 	rf.commitIndex = 0
 	rf.lastApplied = 0
-
+	rf.heartbeatChan = make(chan bool)
+	rf.wonElection = make(chan bool)
+	rf.stepDownChan = make(chan bool)
+	rf.updateCommitChan = make(chan bool)
 	rf.committed = make([]ApplyMsg, 0)
 	// Your initialization code here (3A, 3B).
 	go rf.StateTimer()
