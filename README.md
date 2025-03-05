@@ -6,8 +6,8 @@ The impelmentation is done in Golang.
 To test the code, enter the following commands in a Linux CLI. 
 The project was tested on an Ubuntu-22.4 instance and a Zeus Linux instance.
 ```bash
-$ export "GO111MODULE=off"
-$ export GOPATH="$PWD"
-$ cd src/raft
-$ go test
+export "GO111MODULE=off"
+export GOPATH="$PWD"
+cd src/raft
+go test
 ```
